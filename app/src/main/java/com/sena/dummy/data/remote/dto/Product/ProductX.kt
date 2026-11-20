@@ -14,21 +14,21 @@ data class ProductX(
     @param:Json(name = "description")
     val description: String,
     @param:Json(name = "dimensions")
-    val dimensions: Dimensions,
+    val dimensions: Dimensions? = null,
     @param:Json(name = "discountPercentage")
-    val discountPercentage: Double,
+    val discountPercentage: Double = 0.0,
     @param:Json(name = "id")
     val id: Int,
     @param:Json(name = "images")
     val images: List<String> = emptyList(),
     @param:Json(name = "meta")
-    val meta: Meta,
+    val meta: Meta? = null,
     @param:Json(name = "minimumOrderQuantity")
-    val minimumOrderQuantity: Int,
+    val minimumOrderQuantity: Int = 1,
     @param:Json(name = "price")
     val price: Double,
     @param:Json(name = "rating")
-    val rating: Double,
+    val rating: Double = 0.0,
     @param:Json(name = "returnPolicy")
     val returnPolicy: String? = null,
     @param:Json(name = "reviews")
@@ -38,7 +38,7 @@ data class ProductX(
     @param:Json(name = "sku")
     val sku: String? = null,
     @param:Json(name = "stock")
-    val stock: Int,
+    val stock: Int = 0,
     @param:Json(name = "tags")
     val tags: List<String> = emptyList(),
     @param:Json(name = "thumbnail")
@@ -48,5 +48,5 @@ data class ProductX(
     @param:Json(name = "warrantyInformation")
     val warrantyInformation: String? = null,
     @param:Json(name = "weight")
-    val weight: Int
+    val weight: Int = 0
 )

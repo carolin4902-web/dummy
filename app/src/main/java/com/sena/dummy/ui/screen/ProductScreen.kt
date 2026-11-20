@@ -14,23 +14,41 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.sena.dummy.domain.model.ProductModel
 import com.sena.dummy.ui.viewModel.ProductViewModel
 
@@ -40,7 +58,33 @@ fun ProductScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold { paddingValues ->
+    // Estado SOLO de la interfaz (qué diálogo está abierto)
+    var showForm by remember { mutableStateOf(false) }
+    var productToEdit by remember { mutableStateOf<ProductModel?>(null) }   // null = crear
+    var productToDelete by remember { mutableStateOf<ProductModel?>(null) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Muestra un mensaje (éxito o error) y luego lo limpia del estado
+    LaunchedEffect(uiState.successMessages, uiState.actionError) {
+        val message = uiState.successMessages ?: uiState.actionError
+        if (message != null) {
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearMessages()
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        floatingActionButton = {
+            FloatingActionButton(onClick = {
+                productToEdit = null
+                showForm = true
+            }) {
+                Icon(Icons.Default.Add, contentDescription = "Agregar producto")
+            }
+        }
+    ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -78,17 +122,133 @@ fun ProductScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(uiState.products, key = { it.id }) { product ->
-                            ProductItemCard(product = product)
+                            ProductItemCard(
+                                product = product,
+                                onEdit = {
+                                    productToEdit = product
+                                    showForm = true
+                                },
+                                onDelete = { productToDelete = product }
+                            )
                         }
                     }
                 }
             }
         }
     }
+
+    // ---------- Diálogo crear / editar ----------
+    if (showForm) {
+        ProductFormDialog(
+            product = productToEdit,
+            isSaving = uiState.isSaving,
+            onDismiss = { showForm = false },
+            onConfirm = { title, description, category, price ->
+                val editing = productToEdit
+                if (editing == null) {
+                    viewModel.createProduct(title, description, category, price)
+                } else {
+                    viewModel.updateProduct(
+                        editing.copy(
+                            title = title,
+                            description = description,
+                            category = category,
+                            price = price
+                        )
+                    )
+                }
+                showForm = false
+            }
+        )
+    }
+
+    // ---------- Diálogo confirmar eliminar ----------
+    productToDelete?.let { product ->
+        AlertDialog(
+            onDismissRequest = { productToDelete = null },
+            title = { Text("Eliminar producto") },
+            text = { Text("¿Seguro que quieres eliminar \"${product.title}\"?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteProduct(product.id)
+                    productToDelete = null
+                }) { Text("Eliminar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { productToDelete = null }) { Text("Cancelar") }
+            }
+        )
+    }
 }
 
 @Composable
-private fun ProductItemCard(product: ProductModel) {
+private fun ProductFormDialog(
+    product: ProductModel?,
+    isSaving: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (title: String, description: String, category: String, price: Double) -> Unit
+) {
+    var title by remember { mutableStateOf(product?.title.orEmpty()) }
+    var description by remember { mutableStateOf(product?.description.orEmpty()) }
+    var category by remember { mutableStateOf(product?.category.orEmpty()) }
+    var price by remember { mutableStateOf(product?.price?.toString().orEmpty()) }
+
+    val priceValue = price.replace(',', '.').toDoubleOrNull()
+    val isValid = title.isNotBlank() && category.isNotBlank() && priceValue != null && priceValue >= 0
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (product == null) "Nuevo producto" else "Editar producto") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Título") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Descripción") },
+                    maxLines = 3
+                )
+                OutlinedTextField(
+                    value = category,
+                    onValueChange = { category = it },
+                    label = { Text("Categoría") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = price,
+                    onValueChange = { price = it },
+                    label = { Text("Precio") },
+                    singleLine = true,
+                    isError = price.isNotBlank() && priceValue == null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = isValid && !isSaving,
+                onClick = {
+                    onConfirm(title.trim(), description.trim(), category.trim(), priceValue!!)
+                }
+            ) { Text(if (product == null) "Crear" else "Guardar") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
+}
+
+@Composable
+private fun ProductItemCard(
+    product: ProductModel,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -127,6 +287,18 @@ private fun ProductItemCard(product: ProductModel) {
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary
                 )
+            }
+            Column {
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Default.Edit, contentDescription = "Editar")
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Eliminar",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }
